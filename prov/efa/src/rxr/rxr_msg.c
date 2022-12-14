@@ -853,6 +853,12 @@ int rxr_msg_proc_unexp_msg_list(struct rxr_ep *ep, const struct fi_msg *msg,
 	rxr_tracing(msg_match_unexpected, rx_entry->msg_id, 
 		    (size_t) rx_entry->cq_entry.op_context, rx_entry->total_len, 
 		    (int) tag, msg->addr);
+
+	if (op == ofi_op_tagged) {
+		/* BWB: unexpected receive posted */
+		rxr_timer_stop("unexpected", &ep->rxr_timer_unexpected, rx_entry);
+	}
+
 	/*
 	 * Initialize the matched entry as a multi-recv consumer if the posted
 	 * buffer is a multi-recv buffer.
@@ -1083,6 +1089,8 @@ ssize_t rxr_msg_generic_recv(struct fid_ep *ep, const struct fi_msg *msg,
 		if (ret == -FI_EAGAIN)
 			rxr_ep_progress_internal(rxr_ep);
 	} else if (op == ofi_op_tagged) {
+		/* BWB: expected receive posted */
+		rxr_timer_start(&rxr_ep->rxr_timer_expected, rx_entry);
 		dlist_insert_tail(&rx_entry->entry, &rxr_ep->rx_tagged_list);
 	} else {
 		dlist_insert_tail(&rx_entry->entry, &rxr_ep->rx_list);

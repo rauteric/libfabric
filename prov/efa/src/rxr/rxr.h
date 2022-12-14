@@ -272,6 +272,8 @@ struct rdm_peer {
 	 */
 	int64_t num_read_msg_in_flight;
 
+	/* BWB: timer for receive queue behavior */
+	struct timespec rx_timer;
 };
 
 /** @brief Information of a queued copy.
@@ -289,6 +291,11 @@ struct rxr_queued_copy {
 };
 
 #define RXR_EP_MAX_QUEUED_COPY (8)
+
+struct rxr_latency_counter {
+	uint64_t outstanding;
+	uint64_t nanos[64];
+};
 
 struct rxr_ep {
 	struct util_ep util_ep;
@@ -309,6 +316,9 @@ struct rxr_ep {
 	bool use_shm_for_tx;
 	struct fid_ep *shm_ep;
 	struct fid_cq *shm_cq;
+
+	struct rxr_latency_counter rxr_timer_expected;
+	struct rxr_latency_counter rxr_timer_unexpected;
 
 	/*
 	 * RxR rx/tx queue sizes. These may be different from the core
@@ -729,6 +739,42 @@ static inline void rxr_rm_tx_cq_check(struct rxr_ep *ep, struct util_cq *tx_cq)
 	else
 		ep->rm_full &= ~RXR_RM_TX_CQ_FULL;
 	ofi_genlock_unlock(&tx_cq->cq_lock);
+}
+
+static inline void rxr_timer_start(struct rxr_latency_counter *counter, struct rxr_rx_entry *rx_entry)
+{
+	counter->outstanding++;
+	clock_gettime(CLOCK_MONOTONIC_RAW, &rx_entry->rx_timer);
+}
+
+static inline void rxr_timer_stop(const char *name, struct rxr_latency_counter *counter, struct rxr_rx_entry *rx_entry)
+{
+	struct timespec current_timer;
+	int64_t secs_delta, nsecs_delta, delta;
+    int64_t current_time;
+
+	counter->outstanding--;
+	clock_gettime(CLOCK_MONOTONIC_RAW, &current_timer);
+
+	/* try not to overflow; figure out the delta in seconds,
+	convert it to nanoseconds.  Then figure out the delta in nsecs
+	(which may be negative, if seconds incremented) and add it to
+	the seconds delta. */
+	secs_delta = current_timer.tv_sec - rx_entry->rx_timer.tv_sec;
+	nsecs_delta = current_timer.tv_nsec - rx_entry->rx_timer.tv_nsec;
+	delta = (secs_delta * 1000000000) + nsecs_delta;
+    current_time = ((current_timer.tv_sec * 1000000) + (current_timer.tv_nsec / 1000));
+
+    /* Write raw latency data*/
+    printf("%s %"PRIu64" %"PRIu64"\n", name, current_time, (delta / 1000));
+
+	/* Now record the histogram data.  We're storing fairly coarse
+	 * data, only the leading bit of the number.  Since we expect
+	 * alll the counts to be less than 2^63 nanoseconds in time
+	 * (which is 292.47 years), we leave the counter in ns instead
+	 * of some other unit, because it doesn't really change the
+	 * histogram */
+	counter->nanos[__builtin_clzl((uint64_t)delta)]++;
 }
 
 #endif

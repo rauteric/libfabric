@@ -733,6 +733,47 @@ static int rxr_ep_release_device_cq(struct rxr_ep *rxr_ep)
 	return -ibv_destroy_cq(ibv_cq);
 }
 
+static void rxr_print_timer(const char *name, struct rxr_latency_counter *counter)
+{
+	int i;
+	uint64_t curr, prev, total;
+	char hostname[512];
+	int pid;
+
+	gethostname(hostname, sizeof(hostname)-1);
+	pid = getpid();
+
+	printf("%s:%d: Results for: %s\n", hostname, pid, name);
+	prev = 0;
+	/* everything in buckets 63 - 54 are less than 1 us;
+	   accumulate together */
+	total = 0;
+	for (i = 63 ; i > 53 ; i--) {
+		total += counter->nanos[i];
+	}
+	curr = ((1UL << (63 - 54 + 1)) - 1) / 1000;
+	printf("%s:%d:     %011"PRIu64" - %011"PRIu64" us: %"PRIu64"\n", hostname, pid, prev, curr, total);
+	prev = curr;
+
+	for (i = 53 ; i >= 27 ; i--) {
+		curr = ((1UL << (63 - i + 1)) - 1) / 1000;
+		printf("%s:%d:     %011"PRIu64" - %011"PRIu64" us: %"PRIu64"\n", hostname, pid, prev, curr, counter->nanos[i]);
+		prev = curr;
+	}
+
+	/* accumulate everything > ~2 min in one bucket */
+	total = 0;
+	for (i = 26 ; i >= 0 ; i--) {
+		total += counter->nanos[i];
+	}
+	printf("%s:%d:     > %011"PRIu64" us            : %"PRIu64"\n", hostname, pid, prev, total);
+
+
+	if (counter->outstanding != 0) {
+		printf("%s:%d: **** WARNING: %"PRIu64" counters started but not completed!\n", hostname, pid, counter->outstanding);
+	}
+}
+
 static int rxr_ep_close(struct fid *fid)
 {
 	int ret, retv = 0;
@@ -777,6 +818,10 @@ static int rxr_ep_close(struct fid *fid)
 	}
 	rxr_ep_free_res(rxr_ep);
 	free(rxr_ep);
+
+	rxr_print_timer("expected", &rxr_ep->rxr_timer_expected);
+	rxr_print_timer("unexpected", &rxr_ep->rxr_timer_unexpected);
+
 	return retv;
 }
 
@@ -1471,6 +1516,9 @@ int rxr_ep_init(struct rxr_ep *ep)
 
 		dlist_init(&ep->rx_posted_buf_shm_list);
 	}
+
+	bzero(&ep->rxr_timer_expected, sizeof(struct rxr_latency_counter));
+	bzero(&ep->rxr_timer_unexpected, sizeof(struct rxr_latency_counter));
 
 	/* Initialize entry list */
 	dlist_init(&ep->rx_list);

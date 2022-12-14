@@ -1217,6 +1217,7 @@ struct rxr_op_entry *rxr_pkt_get_tagrtm_rx_entry(struct rxr_ep *ep,
 
 	match = dlist_find_first_match(&ep->rx_tagged_list, match_func,
 	                               *pkt_entry_ptr);
+
 	if (OFI_UNLIKELY(!match)) {
 		/*
 		 * rxr_msg_alloc_unexp_rx_entry_for_tagrtm() might release pkt_entry,
@@ -1227,10 +1228,16 @@ struct rxr_op_entry *rxr_pkt_get_tagrtm_rx_entry(struct rxr_ep *ep,
 			efa_eq_write_error(&ep->util_ep, FI_ENOBUFS, FI_EFA_ERR_RX_ENTRIES_EXHAUSTED);
 			return NULL;
 		}
+
+		/* BWB: unexpected receive pkt received */
+		rxr_timer_start(&ep->rxr_timer_unexpected, rx_entry);
 	} else {
 		rx_entry = rxr_pkt_get_rtm_matched_rx_entry(ep, match, *pkt_entry_ptr);
 		rxr_tracing(msg_match_expected_tagged, rx_entry->msg_id, 
 			    (size_t) rx_entry->cq_entry.op_context, rx_entry->total_len);
+
+		/* BWB: expected receive pkt received */
+		rxr_timer_stop("expected", &ep->rxr_timer_expected, rx_entry);
 	}
 
 	pkt_type = rxr_get_base_hdr((*pkt_entry_ptr)->pkt)->type;

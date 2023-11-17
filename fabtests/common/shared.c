@@ -2170,6 +2170,24 @@ ssize_t ft_tx(struct fid_ep *ep, fi_addr_t fi_addr, size_t size, void *ctx)
 	return ret;
 }
 
+ssize_t ft_tx_rma(enum ft_rma_opcodes rma_op, struct fi_rma_iov *remote, struct fid_ep *ep, fi_addr_t fi_addr, size_t size, void *ctx)
+{
+	ssize_t ret;
+
+	if (ft_check_opts(FT_OPT_VERIFY_DATA | FT_OPT_ACTIVE)) {
+		ret = ft_fill_buf((char *) tx_buf + ft_tx_prefix_size(), size);
+		if (ret)
+			return ret;
+	}
+
+	ret = ft_post_rma(rma_op, tx_buf, size, remote, ctx);
+	if (ret)
+		return ret;
+
+	ret = ft_get_tx_comp(tx_seq);
+	return ret;
+}
+
 ssize_t ft_post_inject_buf(struct fid_ep *ep, fi_addr_t fi_addr, size_t size,
 			   void *op_buf, uint64_t op_tag)
 {

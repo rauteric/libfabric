@@ -143,7 +143,7 @@ int pingpong(void)
 	return 0;
 }
 
-int pingpong_rma(void)
+int pingpong_rma(enum ft_rma_opcodes rma_op, struct fi_rma_iov *remote)
 {
 	int ret, i, inject_size;
 
@@ -168,13 +168,13 @@ int pingpong_rma(void)
 				ft_start();
 
 			if (opts.transfer_size <= inject_size)
-				ret = ft_inject(ep, remote_fi_addr, opts.transfer_size);
+				ret = ft_inject_rma(rma_op, remote, ep, remote_fi_addr, opts.transfer_size);
 			else
-				ret = ft_tx(ep, remote_fi_addr, opts.transfer_size, &tx_ctx);
+				ret = ft_tx_rma(rma_op, remote, ep, remote_fi_addr, opts.transfer_size, &tx_ctx);
 			if (ret)
 				return ret;
 
-			ret = ft_rx(ep, opts.transfer_size);
+			ret = ft_rx_rma(rma_op, ep, opts.transfer_size);
 			if (ret)
 				return ret;
 		}
@@ -183,14 +183,14 @@ int pingpong_rma(void)
 			if (i == opts.warmup_iterations)
 				ft_start();
 
-			ret = ft_rx(ep, opts.transfer_size);
+			ret = ft_rx_rma(rma_op, ep, opts.transfer_size);
 			if (ret)
 				return ret;
 
 			if (opts.transfer_size <= inject_size)
-				ret = ft_inject(ep, remote_fi_addr, opts.transfer_size);
+				ret = ft_inject_rma(rma_op, remote, ep, remote_fi_addr, opts.transfer_size);
 			else
-				ret = ft_tx(ep, remote_fi_addr, opts.transfer_size, &tx_ctx);
+				ret = ft_tx_rma(rma_op, remote, ep, remote_fi_addr, opts.transfer_size, &tx_ctx);
 			if (ret)
 				return ret;
 		}

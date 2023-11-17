@@ -2458,6 +2458,42 @@ ssize_t ft_rx(struct fid_ep *ep, size_t size)
 	return ret;
 }
 
+ssize_t ft_rx_rma(enum ft_rma_opcodes rma_op, struct fid_ep *ep, size_t size)
+{
+	ssize_t ret;
+
+	switch (rma_op) {
+	case FI_RMA_WRITE:
+		/* In this case, there will be no completion on the remote side. Instead, poll the recv buff. */
+		ret = ft_rma_poll_buf(rx_buf, size);
+		if (ret)
+			return ret;
+		break;
+	case FI_RMA_WRITEDATA:
+		/* In this case, a completion will be generated on the remote side, so wait for it. */
+		ret = ft_get_rx_comp(rx_seq);
+		if (ret)
+			return ret;
+		break;
+	default:
+		FT_ERR("Unsupported RMA op type");
+		return EXIT_FAILURE;
+	}
+
+	if (ft_check_opts(FT_OPT_VERIFY_DATA | FT_OPT_ACTIVE)) {
+		ret = ft_check_buf((char *) rx_buf, size);
+		if (ret)
+			return ret;
+	}
+	/* TODO: verify CQ data, if available */
+
+	if (rma_op == FI_RMA_WRITEDATA && (fi->rx_attr->mode & FI_RX_CQ_DATA)) {
+		/* In this mode, the next RDMA write op will consume a receive, so post one here. */
+		ret = ft_post_rx(ep, 0, &rx_ctx);
+	}
+	return ret;
+}
+
 /*
  * Received messages match tagged buffers in order, but the completions can be
  * reported out of order.  A tag is valid if it's within the current window.

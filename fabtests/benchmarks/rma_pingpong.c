@@ -41,7 +41,7 @@ static int run(void)
 	int i, ret;
 
 	ret = ft_init_fabric();
-	}
+
 	if (ret)
 		return ret;
 

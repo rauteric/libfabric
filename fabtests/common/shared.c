@@ -2465,13 +2465,13 @@ ssize_t ft_rx_rma(int iter, enum ft_rma_opcodes rma_op, struct fid_ep *ep, size_
 	ssize_t ret;
 
 	switch (rma_op) {
-	case FI_RMA_WRITE:
+	case FT_RMA_WRITE:
 		/* In this case, there will be no completion on the remote side. Instead, poll the recv buff. */
-		ret = ft_rma_poll_buf(iter, rx_buf, size);
+		ret = ft_rma_poll_buf(rx_buf, iter);
 		if (ret)
 			return ret;
 		break;
-	case FI_RMA_WRITEDATA:
+	case FT_RMA_WRITEDATA:
 		/* In this case, a completion will be generated on the remote side, so wait for it. */
 		ret = ft_get_rx_comp(rx_seq);
 		if (ret)
@@ -2489,7 +2489,7 @@ ssize_t ft_rx_rma(int iter, enum ft_rma_opcodes rma_op, struct fid_ep *ep, size_
 	}
 	/* TODO: verify CQ data, if available */
 
-	if (rma_op == FI_RMA_WRITEDATA && (fi->rx_attr->mode & FI_RX_CQ_DATA)) {
+	if (rma_op == FT_RMA_WRITEDATA && (fi->rx_attr->mode & FI_RX_CQ_DATA)) {
 		/* In this mode, the next RDMA write op will consume a receive, so post one here. */
 		ret = ft_post_rx(ep, 0, &rx_ctx);
 	}

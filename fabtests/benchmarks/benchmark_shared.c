@@ -162,10 +162,22 @@ int pingpong_rma(enum ft_rma_opcodes rma_op, struct fi_rma_iov *remote)
 	if (ret)
 		return ret;
 
+	if (opts.transfer_size == 0) {
+		FT_ERR("Zero-sized transfers not supported");
+		return EXIT_FAILURE;
+	}
+
+	/* Init rx_buf for test */
+	*rx_buf = (char)-1;
+
 	if (opts.dst_addr) {
 		for (i = 0; i < opts.iterations + opts.warmup_iterations; i++) {
+
 			if (i == opts.warmup_iterations)
 				ft_start();
+
+			/* Init tx_buf for test */
+			*tx_buf = (char)i;
 
 			if (opts.transfer_size <= inject_size)
 				ret = ft_inject_rma(rma_op, remote, ep, remote_fi_addr, opts.transfer_size);
@@ -174,7 +186,7 @@ int pingpong_rma(enum ft_rma_opcodes rma_op, struct fi_rma_iov *remote)
 			if (ret)
 				return ret;
 
-			ret = ft_rx_rma(rma_op, ep, opts.transfer_size);
+			ret = ft_rx_rma(i, rma_op, ep, opts.transfer_size);
 			if (ret)
 				return ret;
 		}
@@ -183,9 +195,12 @@ int pingpong_rma(enum ft_rma_opcodes rma_op, struct fi_rma_iov *remote)
 			if (i == opts.warmup_iterations)
 				ft_start();
 
-			ret = ft_rx_rma(rma_op, ep, opts.transfer_size);
+			ret = ft_rx_rma(i, rma_op, ep, opts.transfer_size);
 			if (ret)
 				return ret;
+
+			/* Init tx_buf for test */
+			*tx_buf = (char)i;
 
 			if (opts.transfer_size <= inject_size)
 				ret = ft_inject_rma(rma_op, remote, ep, remote_fi_addr, opts.transfer_size);

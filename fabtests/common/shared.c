@@ -2175,7 +2175,8 @@ ssize_t ft_tx_rma(enum ft_rma_opcodes rma_op, struct fi_rma_iov *remote, struct 
 	ssize_t ret;
 
 	if (ft_check_opts(FT_OPT_VERIFY_DATA | FT_OPT_ACTIVE)) {
-		ret = ft_fill_buf((char *) tx_buf + ft_tx_prefix_size(), size);
+		/* Fill data. First byte reserved for iteration number */
+		ret = ft_fill_buf((char *) tx_buf + 1, size-1);
 		if (ret)
 			return ret;
 	}
@@ -2232,7 +2233,8 @@ ssize_t ft_inject_rma(enum ft_rma_opcodes rma_op, struct fi_rma_iov *remote, str
 	ssize_t ret;
 
 	if (ft_check_opts(FT_OPT_VERIFY_DATA | FT_OPT_ACTIVE)) {
-		ret = ft_fill_buf((char *) tx_buf + ft_tx_prefix_size(), size);
+		/* Fill data. First byte reserved for iteration number */
+		ret = ft_fill_buf((char *) tx_buf + 1, size-1);
 		if (ret)
 			return ret;
 	}
@@ -2458,14 +2460,14 @@ ssize_t ft_rx(struct fid_ep *ep, size_t size)
 	return ret;
 }
 
-ssize_t ft_rx_rma(enum ft_rma_opcodes rma_op, struct fid_ep *ep, size_t size)
+ssize_t ft_rx_rma(int iter, enum ft_rma_opcodes rma_op, struct fid_ep *ep, size_t size)
 {
 	ssize_t ret;
 
 	switch (rma_op) {
 	case FI_RMA_WRITE:
 		/* In this case, there will be no completion on the remote side. Instead, poll the recv buff. */
-		ret = ft_rma_poll_buf(rx_buf, size);
+		ret = ft_rma_poll_buf(iter, rx_buf, size);
 		if (ret)
 			return ret;
 		break;
@@ -2481,7 +2483,7 @@ ssize_t ft_rx_rma(enum ft_rma_opcodes rma_op, struct fid_ep *ep, size_t size)
 	}
 
 	if (ft_check_opts(FT_OPT_VERIFY_DATA | FT_OPT_ACTIVE)) {
-		ret = ft_check_buf((char *) rx_buf, size);
+		ret = ft_check_buf((char *) rx_buf + 1, size-1);
 		if (ret)
 			return ret;
 	}
@@ -3634,6 +3636,26 @@ int ft_check_buf(void *buf, size_t size)
 	}
 
 	return ret;
+}
+
+int ft_rma_poll_buf(void *buf, int iter)
+{
+	volatile char *recv_data;
+
+	if (opts.iface != FI_HMEM_SYSTEM) {
+		/* Not supported */
+		FT_ERR("FI_HMEM not supported for writedata latency test");
+		return EXIT_FAILURE;
+	} else {
+		recv_data = (char *)buf;
+	}
+
+	char expected_val = (char)iter;
+	while (*recv_data != expected_val) {
+		/* Poll */
+	}
+
+	return 0;
 }
 
 uint64_t ft_init_cq_data(struct fi_info *info)
